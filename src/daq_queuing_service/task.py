@@ -1,6 +1,7 @@
 from enum import StrEnum
+from uuid import UUID, uuid4
+
 from pydantic import BaseModel, Field
-import uuid
 
 
 class Status(StrEnum):
@@ -20,7 +21,7 @@ class ExperimentDefinition(BaseModel):
 
 class Task(BaseModel):
     experiment_definition: ExperimentDefinition
-    task_id: str = Field(default_factory=uuid.uuid4)
+    task_id: UUID | str = Field(default_factory=uuid4)
     status: Status = Status.WAITING
 
     def update_status(self, new_status: Status):

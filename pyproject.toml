@@ -12,5 +12,34 @@ dependencies = [
 dev = [
     "pylance>=4.0.0",
     "pyright>=1.1.408",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
     "ruff>=0.15.8",
 ]
+
+[tool.pyright]
+typeCheckingMode = "strict"
+
+[tool.ruff]
+src = ["src", "tests"]
+line-length = 88
+lint.select = [
+    "B",      # flake8-bugbear - https://docs.astral.sh/ruff/rules/#flake8-bugbear-b
+    "C4",     # flake8-comprehensions - https://docs.astral.sh/ruff/rules/#flake8-comprehensions-c4
+    "E",      # pycodestyle errors - https://docs.astral.sh/ruff/rules/#error-e
+    "F",      # pyflakes rules - https://docs.astral.sh/ruff/rules/#pyflakes-f
+    "N",      # pep8-naming - https://docs.astral.sh/ruff/rules/#pep8-naming-n
+    "W",      # pycodestyle warnings - https://docs.astral.sh/ruff/rules/#warning-w
+    "I",      # isort - https://docs.astral.sh/ruff/rules/#isort-i
+    "UP",     # pyupgrade - https://docs.astral.sh/ruff/rules/#pyupgrade-up
+    "SLF",    # self - https://docs.astral.sh/ruff/settings/#lintflake8-self
+    "PT012",  # flake8-pytest-style rules - https://docs.astral.sh/ruff/rules/pytest-raises-with-multiple-statements/#pytest-raises-with-multiple-statements-pt012
+    "RUF018", # walrus operators in asserts - https://docs.astral.sh/ruff/rules/assignment-in-assert/
+    "TID251", # banned api - https://docs.astral.sh/ruff/rules/banned-api/
+    "INP001", # missing __init__.py - https://docs.astral.sh/ruff/rules/implicit-namespace-package/
+]
+
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+timeout = 1
