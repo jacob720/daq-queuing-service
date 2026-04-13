@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Sequence
 from typing import Self
 
 from daq_queuing_service.task import Status, Task, TaskID
@@ -121,17 +122,20 @@ class TaskQueue:
             self._add_tasks(tasks, position)
             self._condition.notify_all()
 
-    async def move_task(self, task_id: TaskID, position: int):
+    async def move_task(self, task_id: TaskID, position: int) -> int:
         async with self._condition:
             position = self._get_valid_position(position)
             task_ids = self._remove_tasks_from_queue([task_id])
             self._queue[position:position] = task_ids
             self._condition.notify_all()
+            return position
 
-    async def remove_tasks(self, task_ids: list[TaskID]) -> list[Task]:
+    async def remove_tasks(self, task_ids: Sequence[TaskID]) -> list[Task]:
         async with self._condition:
             task_ids = self._remove_tasks_from_queue(task_ids)
             tasks = self._remove_tasks_from_registry(task_ids)
+            for task in tasks:
+                task.update_status(Status.CANCELLED)
             self._condition.notify_all()
             return tasks
 
@@ -205,7 +209,7 @@ class TaskQueue:
         for task in tasks:
             self._tasks[task.id] = task
 
-    def _remove_tasks_from_queue(self, task_ids: list[TaskID]) -> list[TaskID]:
+    def _remove_tasks_from_queue(self, task_ids: Sequence[TaskID]) -> list[TaskID]:
         #  Only removes tasks in the queue (not history or registry)
         def should_be_removed(task_id: TaskID):
             return (
@@ -218,7 +222,7 @@ class TaskQueue:
 
         return removed_ids
 
-    def _remove_tasks_from_registry(self, task_ids: list[TaskID]) -> list[Task]:
+    def _remove_tasks_from_registry(self, task_ids: Sequence[TaskID]) -> list[Task]:
         # Should remove tasks from queue/history before removing from registry
         def should_be_removed(task_id: TaskID) -> bool:
             return (
