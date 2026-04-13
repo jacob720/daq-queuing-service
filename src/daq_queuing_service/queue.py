@@ -25,8 +25,7 @@ class TaskQueue:
         self._tasks: TaskRegistry = TaskRegistry()
         self.queue: list[TaskID] = []
         self.history: list[TaskID] = []
-        self.lock = asyncio.Lock()
-        self.condition = asyncio.Condition(self.lock)
+        self.condition = asyncio.Condition()
         self.paused: bool = False
 
     async def claim_next_task_once_available(self) -> Task:
@@ -80,7 +79,7 @@ class TaskQueue:
     async def get_task_by_id(self, task_id: TaskID) -> TaskWithPosition | None:
         # Returns copy so don't have to be worried about caller modifying task.
         # Maybe should return json?
-        async with self.lock:
+        async with self.condition:
             if task_id in self._tasks:
                 return self._get_task_by_id(task_id)
 
@@ -92,7 +91,7 @@ class TaskQueue:
     async def get_task_by_position(self, position: int) -> TaskWithPosition | None:
         # Returns copy so don't have to be worried about caller modifying task.
         # Maybe should return json?
-        async with self.lock:
+        async with self.condition:
             if position < -self.length or position >= self.length:
                 return None
             return TaskWithPosition.from_task(
@@ -102,19 +101,19 @@ class TaskQueue:
     async def get_queue(self) -> list[TaskWithPosition]:
         # Returns copies so don't have to be worried about caller modifying tasks.
         # Maybe should return json?
-        async with self.lock:
+        async with self.condition:
             return [self._get_task_by_id(task_id) for task_id in self.queue]
 
     async def get_history(self) -> list[TaskWithPosition]:
         # Returns copies so don't have to be worried about caller modifying tasks.
         # Maybe should return json?
-        async with self.lock:
+        async with self.condition:
             return [self._get_task_by_id(task_id) for task_id in self.history]
 
     async def get_tasks(self) -> list[TaskWithPosition]:
         # Returns copies so don't have to be worried about caller modifying tasks.
         # Maybe should return json?
-        async with self.lock:
+        async with self.condition:
             return [
                 self._get_task_by_id(task_id) for task_id in self.history + self.queue
             ]
