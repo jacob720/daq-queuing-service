@@ -71,19 +71,23 @@ class TaskQueue:
                 task.add_error(error)
                 task.update_status(Status.ERROR)
             else:
-                task.update_status(Status.COMPLETED)
+                task.update_status(Status.SUCCESS)
 
             self.queue.pop(0)
             self.history.append(task.id)
             self.condition.notify_all()
 
     async def get_task_by_id(self, task_id: str) -> TaskWithPosition | None:
+        # Returns a copy so don't have to be worried about status of task
+        # Maybe should return json?
         async with self.lock:
             if (task := self._tasks.get(task_id)) is not None:
                 position = self.queue.index(task.id) if task.id in self.queue else None
                 return TaskWithPosition.from_task(task, position)
 
     async def get_task_by_position(self, position: int) -> TaskWithPosition | None:
+        # Returns a copy so don't have to be worried about status of task.
+        # Maybe should return json?
         async with self.lock:
             if position < -self.length or position >= self.length:
                 return None
@@ -112,13 +116,13 @@ class TaskQueue:
         async with self.condition:
             self._verify_new_tasks(tasks, position)
             if position is not None:
-                position = self._validate_position(position)
+                position = self._get_valid_position(position)
             self._add_tasks(tasks, position)
             self.condition.notify_all()
 
     async def move_task(self, task_id: TaskID, position: int):
         async with self.condition:
-            position = self._validate_position(position)
+            position = self._get_valid_position(position)
             task_ids = self._remove_tasks_from_queue([task_id])
             self.queue[position:position] = task_ids
             self.condition.notify_all()
@@ -152,13 +156,18 @@ class TaskQueue:
         return self._tasks[self.queue[0]].status == Status.WAITING
 
     def _check_task_valid_to_be_returned(self, task: Task):
+        # Check caller has actual task object not copy
+        # This ensures the caller has claimed the task, reducing the chance a task is
+        # returned that is actually still being run/modified by a different process.
+        # However if the worker crashes we then lose the Task object and can't return
+        # the task? Needs discussion with others.
         assert task is self._tasks.get_must_exist(task.id)
         assert task.id in self.queue, f"This task is not in the queue: {task}"
 
-    def _validate_position(self, position: int) -> int:
+    def _get_valid_position(self, position: int) -> int:
         if position < 0:
             raise ValueError(f"Position must be >= 0, got {position}")
-        if (
+        if (  # if position 0 requested but something in progress, return position 1
             self.length
             and position == 0
             and self._tasks[self.queue[0]].status != Status.WAITING
@@ -189,6 +198,7 @@ class TaskQueue:
         return removed_ids
 
     def _remove_tasks_from_registry(self, task_ids: list[TaskID]) -> list[Task]:
+        # Should NOT remove tasks form registry without also removing from queue/history
         def should_be_removed(task_id: TaskID):
             return (
                 task_id in self._tasks

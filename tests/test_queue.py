@@ -74,7 +74,7 @@ async def test_add_tasks_adds_to_the_end_if_position_bigger_than_queue_length(
     assert set(task_queue._tasks.keys()) == {"0", "1", "2", "3", "4", "new"}  # type: ignore  # noqa
 
 
-async def test_add_task_to_position_0_add_to_position_1_if_first_task_in_progress(
+async def test_add_task_to_position_0_adds_to_position_1_if_first_task_in_progress(
     task_queue_in_progress: TaskQueue,
 ):
     new_tasks = [
@@ -98,7 +98,7 @@ async def test_add_task_to_position_0_add_to_position_1_if_first_task_in_progres
     }
 
 
-async def test_add_task_to_position_0_add_to_position_0_if_first_task_not_in_progress(
+async def test_add_task_to_position_0_adds_to_position_0_if_first_task_waiting(
     task_queue: TaskQueue,
 ):
     new_tasks = [
@@ -168,6 +168,16 @@ async def test_move_task_to_position_0_moves_to_position_1_if_first_task_in_prog
     assert task_queue_in_progress.queue == ["0", "4", "1", "2", "3"]
 
 
+async def test_move_task_to_position_0_moves_to_position_0_if_first_task_waiting(
+    task_queue: TaskQueue,
+):
+    task = await task_queue.get_task_by_position(0)
+    assert task and task.status == Status.WAITING
+
+    await task_queue.move_task("4", 0)
+    assert task_queue.queue == ["4", "0", "1", "2", "3"]
+
+
 async def test_move_task_does_not_move_task_that_is_in_progress(
     task_queue_in_progress: TaskQueue,
 ):
@@ -228,8 +238,8 @@ async def test_get_history_only_returns_tasks_in_history(
     assert task_queue_with_history.queue == ["2", "3", "4"]
     result = await task_queue_with_history.get_history()
     assert result == [
-        '{"experiment_definition":{"sample_id":"0"},"id":"0","status":"Completed","time_started":1.0,"time_completed":1.9,"errors":[]}',
-        '{"experiment_definition":{"sample_id":"1"},"id":"1","status":"Completed","time_started":2.0,"time_completed":2.9,"errors":[]}',
+        '{"experiment_definition":{"sample_id":"0"},"id":"0","status":"Success","time_started":1.0,"time_completed":1.9,"errors":[]}',
+        '{"experiment_definition":{"sample_id":"1"},"id":"1","status":"Success","time_started":2.0,"time_completed":2.9,"errors":[]}',
     ]
 
 
@@ -240,8 +250,8 @@ async def test_get_tasks_returns_tasks_in_queue_and_history(
     assert task_queue_with_history.history == ["0", "1"]
     result = await task_queue_with_history.get_tasks()
     assert result == [
-        '{"experiment_definition":{"sample_id":"0"},"id":"0","status":"Completed","time_started":1.0,"time_completed":1.9,"errors":[]}',
-        '{"experiment_definition":{"sample_id":"1"},"id":"1","status":"Completed","time_started":2.0,"time_completed":2.9,"errors":[]}',
+        '{"experiment_definition":{"sample_id":"0"},"id":"0","status":"Success","time_started":1.0,"time_completed":1.9,"errors":[]}',
+        '{"experiment_definition":{"sample_id":"1"},"id":"1","status":"Success","time_started":2.0,"time_completed":2.9,"errors":[]}',
         '{"experiment_definition":{"sample_id":"2"},"id":"2","status":"Waiting","time_started":null,"time_completed":null,"errors":[]}',
         '{"experiment_definition":{"sample_id":"3"},"id":"3","status":"Waiting","time_started":null,"time_completed":null,"errors":[]}',
         '{"experiment_definition":{"sample_id":"4"},"id":"4","status":"Waiting","time_started":null,"time_completed":null,"errors":[]}',
@@ -383,7 +393,7 @@ async def test_complete_task_puts_task_in_history_and_updates_status_to_complete
     await task_queue.complete_task(task)
     assert task.id not in task_queue.queue
     assert task.id in task_queue.history
-    assert task.status == Status.COMPLETED
+    assert task.status == Status.SUCCESS
 
 
 async def test_complete_task_must_receive_exact_same_object_as_was_claimed(

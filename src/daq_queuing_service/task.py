@@ -10,9 +10,9 @@ type TaskID = str | UUID
 class Status(StrEnum):
     WAITING = "Waiting"  # Waiting in the queue
     IN_PROGRESS = "In progress"  # Claimed by the worker
-    COMPLETED = "Completed"  # Completed successfully
-    CANCELLED = "Cancelled"  # Cancelled before being run
+    SUCCESS = "Success"  # Completed successfully
     ERROR = "Error"  # Error while trying to run
+    CANCELLED = "Cancelled"  # Cancelled before being run
 
 
 class ExperimentDefinition(BaseModel):
@@ -33,7 +33,7 @@ class Task(BaseModel):
 
     @property
     def _locked(self):
-        return self.status in [Status.COMPLETED, Status.ERROR, Status.CANCELLED]
+        return self.status in [Status.SUCCESS, Status.ERROR, Status.CANCELLED]
 
     def _check_lock(self):
         if self._locked:
@@ -46,7 +46,7 @@ class Task(BaseModel):
         self.status = new_status
         if new_status == Status.IN_PROGRESS:
             self.time_started = time.time()
-        elif new_status in [Status.COMPLETED, Status.ERROR]:
+        elif new_status in [Status.SUCCESS, Status.ERROR]:
             self.time_completed = time.time()
         elif new_status == Status.WAITING:
             self.time_started = None
