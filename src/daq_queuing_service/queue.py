@@ -79,14 +79,16 @@ class TaskQueue:
 
     async def get_task_by_id(self, task_id: TaskID) -> TaskWithPosition | None:
         # Returns copy so don't have to be worried about caller modifying task.
-        # Maybe should return json?
         async with self._condition:
             if task_id in self._tasks:
-                return self._get_task_by_id(task_id)
+                task = self._tasks.get_must_exist(task_id)
+                position = (
+                    self._queue.index(task.id) if task.id in self._queue else None
+                )
+                return TaskWithPosition.from_task(task, position)
 
     async def get_task_by_position(self, position: int) -> TaskWithPosition | None:
         # Returns copy so don't have to be worried about caller modifying task.
-        # Maybe should return json?
         async with self._condition:
             if position < -self.length or position >= self.length:
                 return None
@@ -96,23 +98,18 @@ class TaskQueue:
 
     async def get_queue(self) -> list[TaskWithPosition]:
         # Returns copies so don't have to be worried about caller modifying tasks.
-        # Maybe should return json?
         async with self._condition:
-            return [self._get_task_by_id(task_id) for task_id in self._queue]
+            return self._get_queue()
 
     async def get_history(self) -> list[TaskWithPosition]:
         # Returns copies so don't have to be worried about caller modifying tasks.
-        # Maybe should return json?
         async with self._condition:
-            return [self._get_task_by_id(task_id) for task_id in self._history]
+            return self._get_history()
 
     async def get_tasks(self) -> list[TaskWithPosition]:
         # Returns copies so don't have to be worried about caller modifying tasks.
-        # Maybe should return json?
         async with self._condition:
-            return [
-                self._get_task_by_id(task_id) for task_id in self._history + self._queue
-            ]
+            return self._get_history() + self._get_queue()
 
     async def add_tasks(self, tasks: list[Task], position: int | None = None) -> None:
         async with self._condition:
@@ -188,11 +185,6 @@ class TaskQueue:
             return 1
         return position
 
-    def _get_task_by_id(self, task_id: TaskID) -> TaskWithPosition:
-        task = self._tasks.get_must_exist(task_id)
-        position = self._queue.index(task.id) if task.id in self._queue else None
-        return TaskWithPosition.from_task(task, position)
-
     def _verify_new_tasks(self, tasks: list[Task], position: int | None):
         if position and position < 0:
             raise ValueError(f"Position: {position} cannot be less than 0.")
@@ -242,3 +234,15 @@ class TaskQueue:
             }
         )
         return removed
+
+    def _get_queue(self) -> list[TaskWithPosition]:
+        return [
+            TaskWithPosition.from_task(self._tasks.get_must_exist(task_id), i)
+            for i, task_id in enumerate(self._queue)
+        ]
+
+    def _get_history(self) -> list[TaskWithPosition]:
+        return [
+            TaskWithPosition.from_task(self._tasks.get_must_exist(task_id))
+            for task_id in self._history
+        ]
