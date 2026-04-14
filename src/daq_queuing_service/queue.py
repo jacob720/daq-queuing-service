@@ -1,16 +1,9 @@
 import asyncio
 from collections.abc import Sequence
-from typing import Self
 
-from daq_queuing_service.task import Status, Task, TaskID
+from pydantic import BaseModel
 
-
-class TaskWithPosition(Task):
-    position: int | None
-
-    @classmethod
-    def from_task(cls, task: Task, position: int | None = None) -> Self:
-        return cls.model_validate({**task.model_dump(), "position": position})
+from daq_queuing_service.task import Status, Task, TaskID, TaskWithPosition
 
 
 class TaskRegistry(dict[TaskID, Task]):
@@ -21,13 +14,17 @@ class TaskRegistry(dict[TaskID, Task]):
         return task
 
 
+class QueueState(BaseModel):
+    paused: bool
+
+
 class TaskQueue:
     def __init__(self):
         self._tasks: TaskRegistry = TaskRegistry()
         self._queue: list[TaskID] = []
         self._history: list[TaskID] = []
         self._condition = asyncio.Condition()
-        self._paused: bool = False
+        self._state: QueueState = QueueState(paused=True)
 
     async def claim_next_task_once_available(self) -> Task:
         async with self._condition:
@@ -143,25 +140,24 @@ class TaskQueue:
             self._history.clear()
             self._condition.notify_all()
 
-    async def pause(self):
+    async def update_state(self, paused: bool | None = None):
         async with self._condition:
-            self._paused = True
-
-    async def unpause(self):
-        async with self._condition:
-            self._paused = False
+            self._state = QueueState(
+                paused=self._state.paused if paused is None else paused
+            )
             self._condition.notify_all()
+            return self._state
 
     @property
-    def paused(self):
-        return self._paused
+    def state(self):
+        return self._state
 
     @property
     def length(self):
         return len(self._queue)
 
     def _task_available(self) -> bool:
-        if self._paused or not self._queue:
+        if self._state.paused or not self._queue:
             return False
         return self._tasks[self._queue[0]].status == Status.WAITING
 

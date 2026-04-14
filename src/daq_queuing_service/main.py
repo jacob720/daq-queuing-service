@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from pydantic import BaseModel
 
-from daq_queuing_service.queue import TaskQueue, TaskWithPosition
+from daq_queuing_service.queue import QueueState, TaskQueue, TaskWithPosition
 from daq_queuing_service.task import ExperimentDefinition, Status, Task, TaskID
 
 app = FastAPI()
@@ -79,16 +79,15 @@ async def clear_history():
     return await queue.clear_history()
 
 
-@app.post("/pause")
-async def pause():
-    return await queue.pause()
+class QueueStateUpdate(BaseModel):
+    paused: bool | None = None
 
 
-@app.post("/unpause")
-async def unpause():
-    return await queue.unpause()
+@app.patch("/queue/state")
+async def update_state(payload: QueueStateUpdate) -> QueueState:
+    return await queue.update_state(**payload.model_dump(exclude_none=True))
 
 
-@app.get("/paused")
-def paused():
-    return queue.paused
+@app.get("/queue/state")
+def get_state() -> QueueState:
+    return queue.state

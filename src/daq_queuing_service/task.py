@@ -1,5 +1,6 @@
 import time
 from enum import StrEnum
+from typing import Self
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -54,3 +55,11 @@ class Task(BaseModel):
     def add_error(self, error: str):
         self._check_lock()
         self.errors.append(error)
+
+
+class TaskWithPosition(Task):
+    position: int | None
+
+    @classmethod
+    def from_task(cls, task: Task, position: int | None = None) -> Self:
+        return cls.model_validate({**task.model_dump(), "position": position})
