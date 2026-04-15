@@ -41,7 +41,8 @@ class TaskQueue:
             task = self._tasks[self._queue[0]]
             task.claim()
             self._condition.notify_all()
-            return task
+        LOGGER.info(f"Task {task.id} has been claimed")
+        return task
 
     async def wait_until_task_available(self) -> None:
         async with self._condition:
@@ -61,6 +62,7 @@ class TaskQueue:
                         + "it is already owned by the queue."
                     )
             self._condition.notify_all()
+        LOGGER.info(f"Task {task.id} has been returned to the queue")
 
     async def complete_task(self, task: Task):
         async with self._condition:
@@ -72,6 +74,7 @@ class TaskQueue:
             self._queue.pop(0)
             self._history.append(task.id)
             self._condition.notify_all()
+        LOGGER.info(f"Task {task.id} has been completed successfully")
 
     async def fail_task(self, task: Task, errors: list[str] | None = None):
         async with self._condition:
@@ -83,6 +86,7 @@ class TaskQueue:
             self._queue.pop(0)
             self._history.append(task.id)
             self._condition.notify_all()
+        LOGGER.info(f"Task {task.id} has failed with the following errors: {errors}")
 
     async def get_task_by_id(self, task_id: str) -> TaskWithPosition:
         # Returns copy so don't have to be worried about caller modifying task.
@@ -123,6 +127,7 @@ class TaskQueue:
                 position = self._get_valid_position(position)
             self._add_tasks(tasks, position)
             self._condition.notify_all()
+        LOGGER.info(f"Successfully added tasks to queue: {[task.id for task in tasks]}")
 
     async def move_task(self, task_id: str, position: int) -> int:
         async with self._condition:
@@ -131,7 +136,9 @@ class TaskQueue:
             self._remove_tasks_from_queue([task_id])
             self._queue[position:position] = [task_id]
             self._condition.notify_all()
-            return self._queue.index(task_id)
+            new_position = self._queue.index(task_id)
+        LOGGER.info(f"Succesfully moved task {task_id} to position {new_position}")
+        return new_position
 
     async def cancel_tasks(self, task_ids: Sequence[str]) -> list[Task]:
         async with self._condition:
@@ -142,7 +149,8 @@ class TaskQueue:
             for task in tasks:
                 task.cancel()
             self._condition.notify_all()
-            return tasks
+        LOGGER.info(f"Succesfully cancelled tasks: {task_ids}")
+        return tasks
 
     async def clear_history(self):
         async with self._condition:
@@ -150,6 +158,7 @@ class TaskQueue:
                 self._tasks.pop(task_id)
             self._history.clear()
             self._condition.notify_all()
+        LOGGER.info("Succesfully cleared history")
 
     async def update_state(self, paused: bool | None = None):
         async with self._condition:
@@ -157,7 +166,8 @@ class TaskQueue:
                 paused=self._state.paused if paused is None else paused
             )
             self._condition.notify_all()
-            return self._state
+        LOGGER.info(f"Succesfully updated queue state to {self._state}")
+        return self._state
 
     @property
     def state(self):
