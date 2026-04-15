@@ -14,7 +14,7 @@ class QueueStateUpdate(BaseModel):
     paused: bool | None = None
 
 
-class TaskDeleteRequest(BaseModel):
+class TaskCancelRequest(BaseModel):
     task_ids: list[str]
 
 
@@ -45,31 +45,11 @@ def create_api_router(queue: TaskQueue) -> APIRouter:
         return queue.state
 
     @router.get("/queue")
-    async def get_queue(status: Status | None = None) -> list[TaskWithPosition]:
+    async def get_queued_tasks(status: Status | None = None) -> list[TaskWithPosition]:
         return _filter_by_status(await queue.get_queue(), status)
 
-    @router.get("/queue/{position}")
-    async def get_task_by_position(position: int) -> TaskWithPosition | None:
-        return await queue.get_task_by_position(position)
-
-    @router.post("/queue/move")
-    async def move_task(task_id: str, new_position: int) -> int:
-        return await queue.move_task(task_id, new_position)
-
-    @router.get("/tasks")
-    async def get_tasks(status: Status | None = None) -> list[TaskWithPosition]:
-        return _filter_by_status(await queue.get_tasks(), status)
-
-    @router.get("/tasks/{task_id}")
-    async def get_task_by_id(task_id: str) -> TaskWithPosition:
-        return await queue.get_task_by_id(task_id)
-
-    @router.get("/history")
-    async def get_history(status: Status | None = None) -> list[TaskWithPosition]:
-        return _filter_by_status(await queue.get_history(), status)
-
     @router.post("/queue")
-    async def add_tasks(
+    async def add_tasks_to_queue(
         experiment_definitions: list[ExperimentDefinition], position: int | None = None
     ) -> list[str]:
         tasks = [
@@ -80,12 +60,34 @@ def create_api_router(queue: TaskQueue) -> APIRouter:
         await queue.add_tasks(tasks, position)
         return task_ids
 
-    @router.delete("/tasks")
-    async def remove_tasks(payload: TaskDeleteRequest) -> list[Task]:
+    @router.post("/queue/move")
+    async def move_task(task_id: str, new_position: int) -> int:
+        return await queue.move_task(task_id, new_position)
+
+    @router.delete("/queue/tasks")
+    async def cancel_tasks(payload: TaskCancelRequest) -> list[Task]:
         return await queue.cancel_tasks(payload.task_ids)
+
+    @router.get("/queue/{position}")
+    async def get_task_by_position(position: int) -> TaskWithPosition | None:
+        return await queue.get_task_by_position(position)
+
+    @router.get("/tasks")
+    async def get_all_tasks(status: Status | None = None) -> list[TaskWithPosition]:
+        return _filter_by_status(await queue.get_tasks(), status)
+
+    @router.get("/tasks/{task_id}")
+    async def get_task_by_id(task_id: str) -> TaskWithPosition:
+        return await queue.get_task_by_id(task_id)
 
     @router.delete("/history")
     async def clear_history():
         return await queue.clear_history()
+
+    @router.get("/history")
+    async def get_historic_tasks(
+        status: Status | None = None,
+    ) -> list[TaskWithPosition]:
+        return _filter_by_status(await queue.get_history(), status)
 
     return router

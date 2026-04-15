@@ -254,7 +254,7 @@ class TaskQueue:
         for task_id in task_ids:
             task = self._tasks[task_id]
             if task_id not in self._queue:
-                raise TaskNotInQueueError("Task isn't present in queue")
+                raise TaskNotInQueueError(f"Task {task_id} isn't present in queue")
             if task.status == Status.IN_PROGRESS:
                 raise TaskInProgressError(
                     f"Cannot move task '{task_id}', it is currently in progress!"
