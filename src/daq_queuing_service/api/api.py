@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
+from daq_queuing_service.blueapi_adapter import BlueapiClientAdapter
 from daq_queuing_service.task import ExperimentDefinition, Status, Task
 from daq_queuing_service.task_queue.queue import (
     QueueState,
@@ -26,7 +27,9 @@ def _filter_by_status(
     return [task for task in tasks if task.status == status]
 
 
-def create_api_router(queue: TaskQueue) -> APIRouter:
+def create_api_router(
+    queue: TaskQueue, blueapi_client: BlueapiClientAdapter
+) -> APIRouter:
     router = APIRouter()
 
     @router.get("/")

@@ -1,22 +1,16 @@
 import asyncio
 import logging
 
-from blueapi.client import BlueapiRestClient
 from blueapi.client.rest import (
     BlueskyRemoteControlError,
     InvalidParametersError,
     ServiceUnavailableError,
     UnknownPlanError,
 )
-from blueapi.config import RestConfig
 from blueapi.service.model import TrackableTask, WorkerTask
 from blueapi.worker import WorkerState
-from pydantic import HttpUrl
 
-from daq_queuing_service.blueapi_adapter import (
-    BlueapiClientAdapter,
-    construct_blueapi_task_request,
-)
+from daq_queuing_service.blueapi_adapter import BlueapiClientAdapter
 from daq_queuing_service.task import Task
 from daq_queuing_service.task_queue.queue import TaskQueue
 
@@ -25,14 +19,14 @@ LOGGER = logging.getLogger(__name__)
 
 class QueueWorker:
     def __init__(
-        self, queue: TaskQueue, blueapi_url: HttpUrl, poll_time_s: float = 1.0
+        self,
+        queue: TaskQueue,
+        blueapi_client: BlueapiClientAdapter,
+        poll_time_s: float = 1.0,
     ):
         self.poll_time_s = poll_time_s
         self._queue = queue
-        self._url = blueapi_url
-        self._client = BlueapiClientAdapter(
-            BlueapiRestClient(config=RestConfig(url=blueapi_url))
-        )
+        self._client = blueapi_client
 
     async def run_loop(self):
         while True:
@@ -75,8 +69,7 @@ class QueueWorker:
                 return
 
         if not task.blueapi_id:
-            task_request = construct_blueapi_task_request(task)
-            result = self._client.create_task(task_request)
+            result = self._client.create_task(task.experiment_definition)
             if result.value:
                 task.blueapi_id = result.value.task_id
             else:

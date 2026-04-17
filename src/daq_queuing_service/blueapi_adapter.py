@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TypeVar
 
@@ -13,7 +14,7 @@ from blueapi.client.rest import (
 from blueapi.service.model import TaskRequest, TrackableTask, WorkerTask
 from blueapi.worker import WorkerState
 
-from daq_queuing_service.task import Task
+from daq_queuing_service.task import ExperimentDefinition
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,8 +33,13 @@ class BlueapiResult[T, E: Exception]:
 
 
 class BlueapiClientAdapter:
-    def __init__(self, client: BlueapiRestClient):
+    def __init__(
+        self,
+        client: BlueapiRestClient,
+        blueapi_task_request_constructor: Callable[[ExperimentDefinition], TaskRequest],
+    ):
         self.client = client
+        self._task_request_constructor = blueapi_task_request_constructor
 
     def get_state(self) -> BlueapiResult[WorkerState, ServiceUnavailableError]:
         try:
@@ -43,11 +49,12 @@ class BlueapiClientAdapter:
             return BlueapiResult(error=e)
 
     def create_task(
-        self, task_request: TaskRequest
+        self, experiment_definition: ExperimentDefinition
     ) -> BlueapiResult[
         TaskResponse,
         InvalidParametersError | UnknownPlanError | ServiceUnavailableError,
     ]:
+        task_request = self._task_request_constructor(experiment_definition)
         try:
             return BlueapiResult(value=self.client.create_task(task_request))
         except (InvalidParametersError, UnknownPlanError) as e:
@@ -87,9 +94,11 @@ class BlueapiClientAdapter:
             return BlueapiResult(error=e)
 
 
-def construct_blueapi_task_request(task: Task) -> TaskRequest:
+def construct_blueapi_task_request(
+    experiment_definition: ExperimentDefinition,
+) -> TaskRequest:
     return TaskRequest(
-        name=task.experiment_definition.plan_name,
-        params=task.experiment_definition.params,
-        instrument_session=task.experiment_definition.instrument_session,
+        name=experiment_definition.plan_name,
+        params=experiment_definition.params,
+        instrument_session=experiment_definition.instrument_session,
     )
