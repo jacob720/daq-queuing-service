@@ -3,6 +3,7 @@ import logging
 
 from blueapi.client import BlueapiRestClient
 from blueapi.client.rest import (
+    BlueskyRemoteControlError,
     InvalidParametersError,
     ServiceUnavailableError,
     UnknownPlanError,
@@ -40,11 +41,10 @@ class QueueWorker:
 
     async def run_loop(self):
         while True:
-            await self._wait_for_queue_and_blueapi_ready()
-            next_task = await self._queue.claim_next_task_once_available()
-            await self._send_task_to_blue_api_and_wait_for_completion(next_task)
+            next_task = await self._wait_for_next_task()
+            await self._process_task(next_task)
 
-    async def _wait_for_queue_and_blueapi_ready(self):
+    async def _wait_for_next_task(self):
         while True:
             await self._queue.wait_until_task_available()
             result = self._client.get_state()
@@ -54,48 +54,38 @@ class QueueWorker:
                 f"Waiting for BlueAPI worker to be IDLE, currently {result.value}"
             )
             await asyncio.sleep(self.poll_time_s)
+        return await self._queue.claim_next_task_once_available()
 
-    async def _send_task_to_blue_api_and_wait_for_completion(
-        self, task: Task, timeout_s: int = 600
-    ):
+    async def _process_task(self, task: Task, timeout_s: int = 600):
+        if not await self._ensure_blueapi_task_exists(task):
+            return
+
+        await self._run_and_complete_task(task, timeout_s)
+
+    async def _ensure_blueapi_task_exists(self, task: Task):
         if not task.blueapi_id:
             task_request = construct_blueapi_task_request(task)
             result = self._client.create_task(task_request)
             if result.value:
                 task.blueapi_id = result.value.task_id
+                return True
             else:
-                if isinstance(result.error, InvalidParametersError):
-                    await self._queue.fail_task(
-                        task,
-                        errors=["Invalid parameters"]
-                        + [str(error) for error in result.error.errors],
-                    )
-                elif isinstance(result.error, UnknownPlanError):
-                    await self._queue.fail_task(
-                        task, ["Unknown plan", str(result.error)]
-                    )
-                elif isinstance(result.error, ServiceUnavailableError):
-                    await self._queue.return_task_to_queue(task)
-                return
+                assert result.error is not None
+                await self._handle_create_task_error(task, result.error)
+                return False
 
-        await self._start_blueapi_task_and_wait_for_completion(task, timeout_s)
-
-    async def _start_blueapi_task_and_wait_for_completion(
-        self, task: Task, timeout_s: int = 600
-    ):
+    async def _run_and_complete_task(self, task: Task, timeout_s: int = 600):
         assert task.blueapi_id
         result = self._client.update_worker_task(WorkerTask(task_id=task.blueapi_id))
+
         if not result.value:
-            # Issue with blueapi worker state or connection - should retry task later
-            await self._queue.return_task_to_queue(task)
+            assert result.error
+            await self._handle_update_worker_task_error(task, result.error)
             return
 
-        else:
-            task.put_in_progress()
-            LOGGER.info(f"Task {task.id} is in progress, blueapi ID: {task.blueapi_id}")
-            blueapi_task = await self._get_blueapi_task_once_complete(
-                task.blueapi_id, timeout_s
-            )
+        task.put_in_progress()
+        LOGGER.info(f"Task {task.id} is in progress, blueapi ID: {task.blueapi_id}")
+        blueapi_task = await self._wait_for_task_to_finish(task.blueapi_id, timeout_s)
 
         if blueapi_task:
             if blueapi_task.errors:
@@ -105,7 +95,7 @@ class QueueWorker:
         else:
             LOGGER.info("Lost connection to blueapi, terminating loop")
 
-    async def _get_blueapi_task_once_complete(
+    async def _wait_for_task_to_finish(
         self, blueapi_task_id: str, timeout_s: int
     ) -> TrackableTask | None:
         complete = False
@@ -121,3 +111,36 @@ class QueueWorker:
                 break
 
         return blueapi_task
+
+    async def _handle_create_task_error(
+        self,
+        task: Task,
+        error: InvalidParametersError | UnknownPlanError | ServiceUnavailableError,
+    ):
+        match error:
+            case InvalidParametersError():
+                await self._queue.fail_task(
+                    task,
+                    errors=["Invalid parameters"]
+                    + [str(error) for error in error.errors],
+                )
+            case UnknownPlanError():
+                await self._queue.fail_task(task, ["Unknown plan", str(error)])
+            case ServiceUnavailableError():
+                await self._queue.return_task_to_queue(task)
+
+    async def _handle_update_worker_task_error(
+        self,
+        task: Task,
+        error: BlueskyRemoteControlError | ServiceUnavailableError | KeyError,
+    ):
+        match error:
+            case BlueskyRemoteControlError():
+                # We get this error if the blueapi worker is busy
+                await self._queue.return_task_to_queue(task)
+            case KeyError():
+                # We get this error if blueapi can't find a pending task with that ID
+                task.blueapi_id = None
+                await self._queue.return_task_to_queue(task)
+            case ServiceUnavailableError():
+                await self._queue.return_task_to_queue(task)

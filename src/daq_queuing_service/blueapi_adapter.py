@@ -57,10 +57,15 @@ class BlueapiClientAdapter:
 
     def update_worker_task(
         self, worker_task: WorkerTask
-    ) -> BlueapiResult[WorkerTask, BlueskyRemoteControlError | ServiceUnavailableError]:
+    ) -> BlueapiResult[
+        WorkerTask, BlueskyRemoteControlError | KeyError | ServiceUnavailableError
+    ]:
         try:
             return BlueapiResult(value=self.client.update_worker_task(worker_task))
         except BlueskyRemoteControlError as e:
+            LOGGER.error(e)
+            return BlueapiResult(error=e)
+        except KeyError as e:
             LOGGER.error(e)
             return BlueapiResult(error=e)
         except ServiceUnavailableError as e:
@@ -69,16 +74,12 @@ class BlueapiClientAdapter:
 
     def get_task(
         self, task_id: str
-    ) -> BlueapiResult[TrackableTask, ServiceUnavailableError]:
+    ) -> BlueapiResult[TrackableTask, KeyError | ServiceUnavailableError]:
         try:
             return BlueapiResult(value=self.client.get_task(task_id))
+        except KeyError as e:
+            LOGGER.error(f"No blueapi task found with ID {task_id}: {e}")
+            return BlueapiResult(error=e)
         except ServiceUnavailableError as e:
             LOGGER.error(f"Lost connection to blueapi: {e}")
             return BlueapiResult(error=e)
-
-
-# client = BlueapiClientAdapter(BlueapiRestClient())
-# result = client.create_task(
-#     TaskRequest(name="sleeep", params={"time": 1}, instrument_session="")
-# )
-# print(result)
