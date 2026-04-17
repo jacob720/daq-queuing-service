@@ -13,6 +13,8 @@ from blueapi.client.rest import (
 from blueapi.service.model import TaskRequest, TrackableTask, WorkerTask
 from blueapi.worker import WorkerState
 
+from daq_queuing_service.task import Task
+
 LOGGER = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -83,3 +85,11 @@ class BlueapiClientAdapter:
         except ServiceUnavailableError as e:
             LOGGER.error(f"Lost connection to blueapi: {e}")
             return BlueapiResult(error=e)
+
+
+def construct_blueapi_task_request(task: Task) -> TaskRequest:
+    return TaskRequest(
+        name=task.experiment_definition.plan_name,
+        params=task.experiment_definition.params,
+        instrument_session=task.experiment_definition.instrument_session,
+    )
