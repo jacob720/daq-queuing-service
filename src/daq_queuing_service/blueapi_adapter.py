@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 from blueapi.client import BlueapiRestClient
 from blueapi.client.rest import (
@@ -23,7 +23,7 @@ E = TypeVar("E", bound=Exception)
 
 
 @dataclass(frozen=True)
-class BlueapiResult[T, E: Exception]:
+class BlueapiResult(Generic[T, E]):
     value: T | None = None
     error: E | None = None
 
