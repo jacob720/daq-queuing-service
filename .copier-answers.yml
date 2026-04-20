@@ -1,0 +1,20 @@
+# Changes here will be overwritten by Copier
+_commit: 5.0.2
+_src_path: https://github.com/DiamondLightSource/python-copier-template.git
+author_email: jacob.williamson@diamond.ac.uk
+author_name: Jacob Williamson
+component_lifecycle: experimental
+component_owner: group:default/data-acquisition
+component_type: service
+description: A service to queue tasks and chain BlueAPI calls
+distribution_name: daq-queuing-service
+docker: true
+docker_debug: true
+docs_type: sphinx
+git_platform: github.com
+github_org: DiamondLightSource
+package_name: daq_queuing_service
+pypi: true
+repo_name: daq-queuing-service
+strict_typing: true
+type_checker: pyright

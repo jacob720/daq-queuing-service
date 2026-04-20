@@ -1,0 +1,10 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: daq-queuing-service
+  title: daq-queuing-service
+  description: A service to queue tasks and chain BlueAPI calls
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/data-acquisition
